@@ -5,8 +5,10 @@ import time
 from ikpy.chain import Chain
 from ikpy.link import URDFLink
 
-CAMERA_ID = 0 # Zero for webcam, one for any other camera, and so forth
+CAMERA_ID = 0  # Zero for webcam, one for any other camera, and so forth
 ARUCO_DICT = cv2.aruco.DICT_6X6_1000
+ARUCO_1_ID = 0  # ArUco ID while generating
+ARUCO_2_ID = 1  # ArUco ID while generating
 MARKER_SIDE_LENGTH = 0.03  # ArUco marker side length in meters
 BOARD_SIDE_LENGTH = 0.15  # ArUco board side length
 SERVER_IP = '192.168.1.159'
@@ -17,58 +19,6 @@ Z_OFFSET = 0.05  # Desired vertical height off ee from the robot base
 CAPTURE_THRESHOLD = 30  # Number of frames to capture
 CAM_TO_BOARD_LENGTH = 0.35  # Vertical distance from camera to ArUco board in meters
 
-
-def detect_aruco_markers_and_poses():
-    # Define the ArUco dictionary and detector parameters
-    aruco_dict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT)
-    parameters = cv2.aruco.DetectorParameters()
-    camera_matrix, dist_coeffs, rvecs, tvecs = calibrate_camera_live()
-    marker_length = MARKER_SIDE_LENGTH
-    
-    cap = cv2.VideoCapture(0)
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
-        corners, ids, _ = detector.detectMarkers(gray)
-        print("Corners:")
-        print(corners)
-        print("IDs:")
-        print(ids)
-        if ids is not None:
-            ids = ids.flatten()
-            if 1 in ids and 2 in ids:
-                cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-                # Estimate pose for each marker
-                rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, marker_length, camera_matrix, dist_coeffs, rvecs=rvecs, tvecs=tvecs)
-                # Extract poses for markers 1 and 2
-                marker_1_idx = np.where(ids == 1)[0][0]
-                marker_2_idx = np.where(ids == 2)[0][0]
-                # Pose of marker 1
-                tvec_1 = tvecs[marker_1_idx][0]  # Translation vector
-                rvec_1 = rvecs[marker_1_idx][0]  # Rotation vector
-                # Pose of marker 2
-                tvec_2 = tvecs[marker_2_idx][0]
-                rvec_2 = rvecs[marker_2_idx][0]
-                # Draw axes on the markers for visualization
-                cv2.drawFrameAxes(frame, camera_matrix, dist_coeffs, rvec_1, tvec_1, marker_length)
-                cv2.drawFrameAxes(frame, camera_matrix, dist_coeffs, rvec_2, tvec_2, marker_length)
-                cv2.imshow("ArUco Detection", frame)
-                cv2.waitKey(2500)
-                cap.release()
-                cv2.destroyAllWindows()
-                # Return translation and rotation vectors for both markers
-                return {"marker_1": {"tvec": tvec_1, "rvec": rvec_1},
-                        "marker_2": {"tvec": tvec_2, "rvec": rvec_2}}
-        
-        print("detectMarkers() returned 'None' type ids")
-        break
-
-    cap.release()
-    cv2.destroyAllWindows()
 
 def calibrate_camera_live():
     # Define the ArUco dictionary and ArUco GridBoard
@@ -99,24 +49,14 @@ def calibrate_camera_live():
             # Collect corners and IDs for calibration
             objpoints.extend(board.getObjPoints())  # 3D points of the board
             imgpoints.extend(corners)  # 2D points from the image
-            all_ids.extend(ids)        # Collect IDs
-            counters.append(len(ids))  # Track the number of markers
+            all_ids.extend(ids)        
+            counters.append(len(ids))  
             captured_frames += 1
             print(f"Frame {captured_frames} captured.")
 
     cap.release()
     cv2.destroyAllWindows()
     # Perform camera calibration
-    """ print(imgpoints)
-    print("___1")
-    print(np.concatenate(all_ids))
-    print("___2")
-    print(np.array(counters))
-    print("___3")
-    print(board)
-    print("___4")
-    print(gray.shape[::-1])
-    print("___5") """
     print("Calibrating... Hold steady")
     ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.aruco.calibrateCameraAruco(
         corners=imgpoints,
@@ -139,6 +79,60 @@ def calibrate_camera_live():
         print("Calibration failed.")
         return None, None
 
+def detect_aruco_markers_and_poses():
+    # Define the ArUco dictionary and detector parameters
+    aruco_dict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT)
+    parameters = cv2.aruco.DetectorParameters()
+    camera_matrix, dist_coeffs, _, _ = calibrate_camera_live()
+    marker_length = MARKER_SIDE_LENGTH
+    
+    # For each detected marker, extract the rotation and translation vectors
+    """ for i in range(len(aprvecs)): 
+        aprvecs = aprvecs[i].flatten().flatten()
+        aptvecs = aptvecs[i].flatten().flatten()
+        rvec_tuple = tuple(aprvecs)
+        tvec_tuple = tuple(aptvecs) """
+
+    cap = cv2.VideoCapture(0)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
+        corners, ids, _ = detector.detectMarkers(gray)
+        if ids is not None:
+            ids = ids.flatten()
+            cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, marker_length, camera_matrix, dist_coeffs)
+            # Extract poses for markers 1 and 2
+            marker_1_idx = np.where(ids == ARUCO_1_ID)[0]
+            marker_2_idx = np.where(ids == ARUCO_2_ID)[0]
+            # Pose of marker 1
+            tvec_1 = tvecs[marker_1_idx][0]  # Translation vector
+            rvec_1 = rvecs[marker_1_idx][0]  # Rotation vector
+            # Pose of marker 2
+            tvec_2 = tvecs[marker_2_idx][0]
+            rvec_2 = rvecs[marker_2_idx][0]
+            # Draw axes on the markers for visualization
+            cv2.imshow("ArUco Detection", frame)
+            cv2.drawFrameAxes(frame, camera_matrix, dist_coeffs, rvec_1, tvec_1, marker_length)
+            cv2.drawFrameAxes(frame, camera_matrix, dist_coeffs, rvec_2, tvec_2, marker_length)
+            cv2.waitKey(2500)
+            cap.release()
+            cv2.destroyAllWindows()
+            # Return translation and rotation vectors for both markers
+            return {"marker_1": {"tvec": tvec_1, "rvec": rvec_1},
+                    "marker_2": {"tvec": tvec_2, "rvec": rvec_2}}
+        
+        print("detectMarkers() returned 'None' type ids")
+        break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
 def send_tcp_packet(client_socket: socket.socket, message: str):
     # Send a message to the server and receive the response.
     try:
@@ -149,13 +143,14 @@ def send_tcp_packet(client_socket: socket.socket, message: str):
         print(f"Socket error: {e}")
         return None
 
-def transform_to_robot_frame(tvec_camera, transformation_matrix):
+def transform_to_robot_frame(tvec_camera: np.int64, transformation_matrix):
     """
     Transform a 3D position from the camera frame to the robot frame.
     :param tvec_camera: Translation vector in camera frame (e.g., [x, y, z]).
     :param transformation_matrix: 4x4 transformation matrix from camera to robot base.
     :return: Transformed position in the robot frame.
     """
+    tvec_camera = tvec_camera.flatten()
     tvec_camera_homogeneous = np.array([tvec_camera[0], tvec_camera[1], tvec_camera[2], 1])  # Homogeneous coordinates
     tvec_robot_homogeneous = np.dot(transformation_matrix, tvec_camera_homogeneous)
     return tvec_robot_homogeneous[:3]
@@ -163,27 +158,28 @@ def transform_to_robot_frame(tvec_camera, transformation_matrix):
 def setup_robot_kinematics():
     # Define the robot chain (based on your robot's URDF or specifications)
     robot_chain = Chain(name="mycobot_chain", links=[
-        URDFLink(name="base", translation_vector=[0, 0, 0], rotation=[0, 0, 0]),
-        URDFLink(name="joint_1", translation_vector=[0, 0, 0.21], rotation=[0, 0, 1]),
-        URDFLink(name="joint_2", translation_vector=[0, 0, 0.25], rotation=[0, 1, 0]),
-        URDFLink(name="joint_3", translation_vector=[0, 0, 0.25], rotation=[0, 0, 1]),
-        URDFLink(name="joint_4", translation_vector=[0, 0, 0.1], rotation=[0, 1, 0]),
-        URDFLink(name="joint_5", translation_vector=[0, 0, 0.07], rotation=[0, 0, 1]),
-        URDFLink(name="end_effector", translation_vector=[0, 0, 0.05], rotation=[0, 0, 0])
+        URDFLink(name="base", origin_translation=[0, 0, 0], origin_orientation=[0, 0, 0], joint_type="revolute", rotation=[0, 0, 1]),
+        URDFLink(name="joint_1", origin_translation=[0, 0, 0.21], origin_orientation=[0, 0, 0], joint_type="revolute", rotation=[0, 0, 1]),
+        URDFLink(name="joint_2", origin_translation=[0, 0, 0.25], origin_orientation=[0, 0, 0], joint_type="revolute", rotation=[0, 1, 0]),
+        URDFLink(name="joint_3", origin_translation=[0, 0, 0.25], origin_orientation=[0, 0, 0], joint_type="revolute", rotation=[0, 0, 1]),
+        URDFLink(name="joint_4", origin_translation=[0, 0, 0.107], origin_orientation=[0, 0, 0], joint_type="revolute", rotation=[0, 1, 0]),
+        URDFLink(name="joint_5", origin_translation=[0, 0, 0.0762], origin_orientation=[0, 0, 0], joint_type="revolute", rotation=[0, 0, 1]),
+        URDFLink(name="end_effector", origin_translation=[0, 0, 0.1095], origin_orientation=[0, 0, 0], joint_type="fixed")
     ])
     return robot_chain
 
 def calculate_joint_angles(robot_chain: Chain, target_position):
     """
     Compute inverse kinematics to find joint angles for the target position.
-
     :param robot_chain: The robot's kinematic chain (ikpy.Chain).
     :param target_position: Target [x, y, z] position of the end effector in the robot's frame.
     :return: List of joint angles.
     """
     target_frame = np.eye(4)
     target_frame[:3, 3] = target_position  # Set target position
-    joint_angles = robot_chain.inverse_kinematics(target_frame)
+    target_position = target_frame[:3, 3]
+    print(f"Target position:\n{target_position}")
+    joint_angles = robot_chain.inverse_kinematics(target_position=target_position)
     return joint_angles
 
 if __name__ == "__main__":
@@ -211,10 +207,11 @@ if __name__ == "__main__":
     angles_1 = calculate_joint_angles(robot_chain, tvec_1_robot)
     angles_2 = calculate_joint_angles(robot_chain, tvec_2_robot)
 
-    print(angles_1)
-    print(angles_2)
+    print("Code execution finished\n" + "__________Results__________")
+    print(f"Movement angles (radians) for marker 1: {angles_1}")
+    print(f"Movement angles (radians) for marker 2: {angles_2}")
 
-    # Step 5: Move robot to target positions
+    # Step 5: Move robot to target positions, uncomment when connected to robot
     """ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
         client_socket.connect((SERVER_IP, SERVER_PORT))
         print("Moving to Marker 1")
