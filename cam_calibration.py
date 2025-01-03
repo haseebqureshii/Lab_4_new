@@ -1,5 +1,5 @@
 from imports import cv2, np, sys
-from env_var import ARUCO_DICT, BOARD_SIDE_LENGTH, MARKER_SIDE_LENGTH, CAPTURE_THRESHOLD, CAM_TO_BOARD_LENGTH
+from env_var import ARUCO_DICT, BOARD_SIDE_LENGTH, MARKER_SIDE_LENGTH, CAPTURE_THRESHOLD, CAM_TO_BOARD_LENGTH, NUM_OF_MARKERS
 
 def calibrate_camera_live():
     # Define the ArUco dictionary and ArUco GridBoard
@@ -12,7 +12,7 @@ def calibrate_camera_live():
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Camera could not be opened.")
-        exit()
+        sys.exit()
     captured_frames = 0
 
     print("Starting live calibration...")
@@ -20,12 +20,12 @@ def calibrate_camera_live():
         ret, frame = cap.read()
         if not ret or frame is None:
             print("Failed to capture frame.")
-            exit()
+            sys.exit()
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         detector = cv2.aruco.ArucoDetector(aruco_dict, cv2.aruco.DetectorParameters())
         corners, ids, _ = detector.detectMarkers(gray)
-        if ids is not None:
+        if ids is not None and len(ids) >= NUM_OF_MARKERS:
             cv2.aruco.drawDetectedMarkers(frame, corners, ids)
             # Collect corners and IDs for calibration
             objpoints.extend(board.getObjPoints())  # 3D points of the board

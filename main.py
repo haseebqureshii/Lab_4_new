@@ -1,10 +1,11 @@
 import math
 from imports import np, socket, time
-from env_var import X_OFFSET, Y_OFFSET, Z_OFFSET, EE_VELOCITY
+from env_var import X_OFFSET, Y_OFFSET, Z_OFFSET
 from aruco_detection import detect_aruco_markers_and_poses
 from cam_robot_transform import transform_to_robot_frame
 from kinematics_setup import setup_robot_kinematics
 from Inverse_kinematics import calculate_joint_angles
+from move_in_straight_line import move_in_straight_line
 from robot_comms import send_tcp_packet
 
 if __name__ == "__main__":
@@ -28,13 +29,17 @@ if __name__ == "__main__":
     # Step 3: Setup robot kinematics
     robot_chain = setup_robot_kinematics()
 
+    distance_meters = math.sqrt((tvec_1_robot[0] - tvec_2_robot[0])**2 + (tvec_1_robot[1] - tvec_2_robot[1])**2)
+    print(f"Distance b/w the markers {distance_meters*100} cm")
     # Step 4: Calculate joint angles
     angles_1 = calculate_joint_angles(robot_chain, tvec_1_robot)
     angles_2 = calculate_joint_angles(robot_chain, tvec_2_robot)
 
     print("Code execution finished\n" + "__________Results__________")
     print("Movement angles (degrees) for marker 1: ", list(map(lambda r:math.degrees(r), angles_1)))
-    print("Movement angles (degrees) for marker 2: ", list(map(lambda r:math.degrees(r), angles_1)))
+    print("Movement angles (degrees) for marker 2: ", list(map(lambda r:math.degrees(r), angles_2)))
+
+    #move_in_straight_line(robot_chain, tvec_1_robot)
     #print(f"Movement angles (radians) for marker 1: {angles_1}")
     #print(f"Movement angles (radians) for marker 2: {angles_2}")
 
